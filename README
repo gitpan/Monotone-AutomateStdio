@@ -1,20 +1,23 @@
-Monotone::AutomateStdio version 0.1
+Monotone::AutomateStdio Version 0.3
 ===================================
 
 This is a Perl library module for accessing Monotone's automate stdio
-interface. Monotone is a distributed, change-set, based SCM system. It has a
+interface. Monotone is a distributed, change-set, based VCS system. It has a
 mode where commands can be sent to it via STDIN and output read from it via
 STDOUT. Monontone::AutomateStdio makes use of this facility to provide the Perl
 programmer with a programmatic interface to Monotone.
 
-For further details on Monotone see http://monotone.ca.
+For further details on Monotone see http://monotone.ca. For further details on
+Monotone::AutomateStdio see http://www.coosoft.plus.com/software.html.
 
 
 INSTALLATION
 ------------
 
-To install this module type the following:
+Simply unpack the tar file and use Makefile.PL by doing:
 
+    tar xvpzf Monotone-AutomateStdio-<Version Number>.tar.gz
+    cd Monotone-AutomateStdio-<Version Number>
     perl Makefile.PL
     make
     make test
@@ -22,7 +25,12 @@ To install this module type the following:
 
 To install to a custom location use:
 
-    perl Makefile.PL PREFIX=<Custom Full Path Name>
+    perl Makefile.PL PREFIX=<PATH>
+
+To configure the software to run in a custom location but have the installation
+location prepended by an additional path (useful for package maintainers) use:
+
+    perl Makefile.PL PREFIX=<PATH> DESTDIR=<PATH>
 
 Please note that automated testing of this library module is still `work in
 progress'. There is a test harness called mtn-tester that can be used to test
@@ -42,7 +50,7 @@ DEPENDENCIES
 
 This module requires these other modules and libraries:
 
-  Perl 5.8.5
+    * Perl 5.8.5
 
 Older versions of Perl may work but these have not been tested at this point in
 time.
