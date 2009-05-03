@@ -2,7 +2,7 @@
 #
 #   File Name    - AutomateStdio.pm
 #
-#   Description  - Class module that provides an interface to Monotone's
+#   Description  - A class module that provides an interface to Monotone's
 #                  automate stdio interface.
 #
 #   Authors      - A.E.Cooper. With contributions from T.Keller.
@@ -71,24 +71,26 @@ use Symbol qw(gensym);
 # Constants used to represent the different types of capability Monotone may or
 # may not provide depending upon its version.
 
-use constant MTN_DB_GET                           => 0;
-use constant MTN_DROP_ATTRIBUTE                   => 1;
-use constant MTN_DROP_DB_VARIABLES                => 2;
-use constant MTN_FILE_MERGE                       => 3;
-use constant MTN_GET_ATTRIBUTES                   => 4;
-use constant MTN_GET_CURRENT_REVISION             => 5;
-use constant MTN_GET_DB_VARIABLES                 => 6;
-use constant MTN_GET_WORKSPACE_ROOT               => 7;
-use constant MTN_IGNORE_SUSPEND_CERTS             => 8;
-use constant MTN_INVENTORY_IN_IO_STANZA_FORMAT    => 9;
-use constant MTN_INVENTORY_INCLUDE_BIRTH_ID       => 10;
-use constant MTN_INVENTORY_TAKE_OPTIONS           => 11;
-use constant MTN_LUA                              => 12;
-use constant MTN_READ_PACKETS                     => 13;
-use constant MTN_SET_ATTRIBUTE                    => 14;
-use constant MTN_SET_DB_VARIABLE                  => 15;
-use constant MTN_SHOW_CONFLICTS                   => 16;
-use constant MTN_USE_P_SELECTOR                   => 17;
+use constant MTN_DB_GET                        => 0;
+use constant MTN_DROP_ATTRIBUTE                => 1;
+use constant MTN_DROP_DB_VARIABLES             => 2;
+use constant MTN_FILE_MERGE                    => 3;
+use constant MTN_GET_ATTRIBUTES                => 4;
+use constant MTN_GET_CURRENT_REVISION          => 5;
+use constant MTN_GET_DB_VARIABLES              => 6;
+use constant MTN_GET_WORKSPACE_ROOT            => 7;
+use constant MTN_IGNORING_OF_SUSPEND_CERTS     => 8;
+use constant MTN_INVENTORY_IN_IO_STANZA_FORMAT => 9;
+use constant MTN_INVENTORY_TAKING_OPTIONS      => 10;
+use constant MTN_INVENTORY_WITH_BIRTH_ID       => 11;
+use constant MTN_LUA                           => 12;
+use constant MTN_M_SELECTOR                    => 13;
+use constant MTN_P_SELECTOR                    => 14;
+use constant MTN_READ_PACKETS                  => 15;
+use constant MTN_SET_ATTRIBUTE                 => 16;
+use constant MTN_SET_DB_VARIABLE               => 17;
+use constant MTN_SHOW_CONFLICTS                => 18;
+use constant MTN_U_SELECTOR                    => 19;
 
 # Constants used to represent the different error levels.
 
@@ -219,12 +221,18 @@ my($db_locked_handler_data,
 
 # ***** FUNCTIONAL PROTOTYPES *****
 
+# Constructors and destructor.
+
+sub new_from_db($;$$);
+sub new_from_ws($;$$);
+*new = *new_from_db;
+sub DESTROY($);
+
 # Public methods.
 
 sub ancestors($$@);
 sub ancestry_difference($$$;@);
 sub branches($$);
-sub can($$);
 sub cert($$$$);
 sub certs($$$);
 sub children($$$);
@@ -265,8 +273,6 @@ sub inventory($$;$@);
 sub keys($$);
 sub leaves($$);
 sub lua($$$;@);
-sub new_from_db($;$$);
-sub new_from_ws($;$$);
 sub packet_for_fdata($$$);
 sub packet_for_fdelta($$$$);
 sub packet_for_rdata($$$);
@@ -283,6 +289,7 @@ sub select($$$);
 sub set_attribute($$$$);
 sub set_db_variable($$$$);
 sub show_conflicts($$;$$$);
+sub supports($$);
 sub switch_to_ws_root($$);
 sub tags($$;$);
 sub toposort($$@);
@@ -290,7 +297,6 @@ sub toposort($$@);
 # Public aliased methods.
 
 *attributes = *get_attributes;
-*new = *new_from_db;
 *db_set = *set_db_variable;
 
 # Private methods and routines.
@@ -324,22 +330,24 @@ our %EXPORT_TAGS = (capabilities => [qw(MTN_DB_GET
 					MTN_GET_CURRENT_REVISION
 					MTN_GET_DB_VARIABLES
 					MTN_GET_WORKSPACE_ROOT
-					MTN_IGNORE_SUSPEND_CERTS
+					MTN_IGNORING_OF_SUSPEND_CERTS
 					MTN_INVENTORY_IN_IO_STANZA_FORMAT
-					MTN_INVENTORY_INCLUDE_BIRTH_ID
-					MTN_INVENTORY_TAKE_OPTIONS
+					MTN_INVENTORY_TAKING_OPTIONS
+					MTN_INVENTORY_WITH_BIRTH_ID
 					MTN_LUA
+					MTN_M_SELECTOR
+					MTN_P_SELECTOR
 					MTN_READ_PACKETS
 					MTN_SET_ATTRIBUTE
 					MTN_SET_DB_VARIABLE
 					MTN_SHOW_CONFLICTS
-					MTN_USE_P_SELECTOR)],
+					MTN_U_SELECTOR)],
 		    severities	 => [qw(MTN_SEVERITY_ALL
 					MTN_SEVERITY_ERROR
 					MTN_SEVERITY_WARNING)]);
 our @EXPORT = qw();
 Exporter::export_ok_tags(qw(capabilities severities));
-our $VERSION = 0.03;
+our $VERSION = 0.04;
 #
 ##############################################################################
 #
@@ -399,7 +407,7 @@ sub new_from_db($;$$)
 
     # Startup the mtn subprocess (also determining the interface version).
 
-    startup($this);
+    $this->startup();
 
     return $this;
 
@@ -458,7 +466,7 @@ sub new_from_ws($;$$)
 
     # Startup the mtn subprocess (also determining the interface version).
 
-    startup($this);
+    $this->startup();
 
     return $this;
 
@@ -470,13 +478,13 @@ sub new_from_ws($;$$)
 #
 #   Description  - Class destructor.
 #
-#   Data         - None.
+#   Data         - $this : The object.
 #
 ##############################################################################
 
 
 
-sub DESTROY
+sub DESTROY($)
 {
 
     my $this = $_[0];
@@ -497,7 +505,7 @@ sub DESTROY
 	local $@;
 	eval
 	{
-	    closedown($this);
+	    $this->closedown();
 	};
     }
 
@@ -526,7 +534,7 @@ sub ancestors($$@)
 
     my($this, $list, @revision_ids) = @_;
 
-    return mtn_command($this, "ancestors", $list, @revision_ids);
+    return $this->mtn_command("ancestors", $list, @revision_ids);
 
 }
 #
@@ -556,11 +564,10 @@ sub ancestry_difference($$$;@)
 
     my($this, $list, $new_revision_id, @old_revision_ids) = @_;
 
-    return mtn_command($this,
-		       "ancestry_difference",
-		       $list,
-		       $new_revision_id,
-		       @old_revision_ids);
+    return $this->mtn_command("ancestry_difference",
+			      $list,
+			      $new_revision_id,
+			      @old_revision_ids);
 
 }
 #
@@ -584,7 +591,7 @@ sub branches($$)
 
     my($this, $list) = @_;
 
-    return mtn_command($this, "branches", $list);
+    return $this->mtn_command("branches", $list);
 
 }
 #
@@ -612,7 +619,7 @@ sub cert($$$$)
 
     my $dummy;
 
-    return mtn_command($this, "cert", \$dummy, $revision_id, $name, $value);
+    return $this->mtn_command("cert", \$dummy, $revision_id, $name, $value);
 
 }
 #
@@ -643,7 +650,7 @@ sub certs($$$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, "certs", $ref, $revision_id);
+	return $this->mtn_command("certs", $ref, $revision_id);
     }
     else
     {
@@ -651,7 +658,7 @@ sub certs($$$)
 	my($i,
 	   @lines);
 
-	if (! mtn_command($this, "certs", \@lines, $revision_id))
+	if (! $this->mtn_command("certs", \@lines, $revision_id))
 	{
 	    return;
 	}
@@ -709,7 +716,7 @@ sub children($$$)
 
     my($this, $list, @revision_ids) = @_;
 
-    return mtn_command($this, "children", $list, @revision_ids);
+    return $this->mtn_command("children", $list, @revision_ids);
 
 }
 #
@@ -737,7 +744,7 @@ sub common_ancestors($$@)
 
     my($this, $list, @revision_ids) = @_;
 
-    return mtn_command($this, "common_ancestors", $list, @revision_ids);
+    return $this->mtn_command("common_ancestors", $list, @revision_ids);
 
 }
 #
@@ -791,11 +798,10 @@ sub content_diff($$;$$$@)
     push(@opts, {key => "r", value => $revision_id2})
 	unless (! defined($revision_id2));
 
-    return mtn_command_with_options($this,
-				    "content_diff",
-				    $buffer,
-				    \@opts,
-				    @file_names);
+    return $this->mtn_command_with_options("content_diff",
+					   $buffer,
+					   \@opts,
+					   @file_names);
 
 }
 #
@@ -821,7 +827,7 @@ sub db_get($$$$)
 
     my($this, $buffer, $domain, $name) = @_;
 
-    return mtn_command($this, "db_get", $buffer, $domain, $name);
+    return $this->mtn_command("db_get", $buffer, $domain, $name);
 
 }
 #
@@ -848,7 +854,7 @@ sub descendents($$@)
 
     my($this, $list, @revision_ids) = @_;
 
-    return mtn_command($this, "descendents", $list, @revision_ids);
+    return $this->mtn_command("descendents", $list, @revision_ids);
 
 }
 #
@@ -877,7 +883,7 @@ sub drop_attribute($$$)
 
     my $dummy;
 
-    return mtn_command($this, "drop_attribute", \$dummy, $path, $key);
+    return $this->mtn_command("drop_attribute", \$dummy, $path, $key);
 
 }
 #
@@ -906,7 +912,7 @@ sub drop_db_variables($$;$)
 
     my $dummy;
 
-    return mtn_command($this, "drop_db_variables", \$dummy, $domain, $name);
+    return $this->mtn_command("drop_db_variables", \$dummy, $domain, $name);
 
 }
 #
@@ -934,7 +940,7 @@ sub erase_ancestors($$;@)
 
     my($this, $list, @revision_ids) = @_;
 
-    return mtn_command($this, "erase_ancestors", $list, @revision_ids);
+    return $this->mtn_command("erase_ancestors", $list, @revision_ids);
 
 }
 #
@@ -971,13 +977,12 @@ sub file_merge($$$$$$)
        $right_revision_id,
        $right_file_name) = @_;
 
-    return mtn_command($this,
-		       "file_merge",
-		       $buffer,
-		       $left_revision_id,
-		       $left_file_name,
-		       $right_revision_id,
-		       $right_file_name);
+    return $this->mtn_command("file_merge",
+			      $buffer,
+			      $left_revision_id,
+			      $left_file_name,
+			      $right_revision_id,
+			      $right_file_name);
 
 }
 #
@@ -1008,7 +1013,7 @@ sub genkey($$$$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, "genkey", $ref, $key_id, $pass_phrase);
+	return $this->mtn_command("genkey", $ref, $key_id, $pass_phrase);
     }
     else
     {
@@ -1017,7 +1022,7 @@ sub genkey($$$$)
 	   $kv_record,
 	   @lines);
 
-	if (! mtn_command($this, "genkey", \@lines, $key_id, $pass_phrase))
+	if (! $this->mtn_command("genkey", \@lines, $key_id, $pass_phrase))
 	{
 	    return;
 	}
@@ -1069,7 +1074,7 @@ sub get_attributes($$$)
 
     # This command was renamed in version 0.36 (i/f version 5.x).
 
-    if (can($this, MTN_GET_ATTRIBUTES))
+    if ($this->supports(MTN_GET_ATTRIBUTES))
     {
 	$cmd = "get_attributes";
     }
@@ -1083,7 +1088,7 @@ sub get_attributes($$$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, $cmd, $ref, $file_name);
+	return $this->mtn_command($cmd, $ref, $file_name);
     }
     else
     {
@@ -1091,7 +1096,7 @@ sub get_attributes($$$)
 	my($i,
 	   @lines);
 
-	if (! mtn_command($this, $cmd, \@lines, $file_name))
+	if (! $this->mtn_command($cmd, \@lines, $file_name))
 	{
 	    return;
 	}
@@ -1155,7 +1160,7 @@ sub get_base_revision_id($$)
     my @list;
 
     $$buffer = "";
-    if (! mtn_command($this, "get_base_revision_id", \@list))
+    if (! $this->mtn_command("get_base_revision_id", \@list))
     {
 	return;
     }
@@ -1195,10 +1200,10 @@ sub get_content_changed($$$$)
 
     # Run the command and get the data.
 
-    if (! mtn_command($this, "get_content_changed",
-		      \@lines,
-		      $revision_id,
-		      $file_name))
+    if (! $this->mtn_command("get_content_changed",
+			     \@lines,
+			     $revision_id,
+			     $file_name))
     {
 	return;
     }
@@ -1250,11 +1255,11 @@ sub get_corresponding_path($$$$$)
 
     # Run the command and get the data.
 
-    if (! mtn_command($this, "get_corresponding_path",
-		      \@lines,
-		      $source_revision_id,
-		      $file_name,
-		      $target_revision_id))
+    if (! $this->mtn_command("get_corresponding_path",
+			     \@lines,
+			     $source_revision_id,
+			     $file_name,
+			     $target_revision_id))
     {
 	return;
     }
@@ -1326,22 +1331,20 @@ sub get_current_revision($$;$@)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command_with_options($this,
-					"get_current_revision",
-					$ref,
-					\@opts,
-					@paths);
+	return $this->mtn_command_with_options("get_current_revision",
+					       $ref,
+					       \@opts,
+					       @paths);
     }
     else
     {
 
 	my @lines;
 
-	if (! mtn_command_with_options($this,
-				       "get_current_revision",
-				       \@lines,
-				       \@opts,
-				       @paths))
+	if (! $this->mtn_command_with_options("get_current_revision",
+					      \@lines,
+					      \@opts,
+					      @paths))
 	{
 	    return;
 	}
@@ -1377,7 +1380,7 @@ sub get_current_revision_id($$)
     my @list;
 
     $$buffer = "";
-    if (! mtn_command($this, "get_current_revision_id", \@list))
+    if (! $this->mtn_command("get_current_revision_id", \@list))
     {
 	return;
     }
@@ -1415,7 +1418,7 @@ sub get_db_variables($$;$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, "get_db_variables", $ref, $domain);
+	return $this->mtn_command("get_db_variables", $ref, $domain);
     }
     else
     {
@@ -1426,7 +1429,7 @@ sub get_db_variables($$;$)
 	   $name,
 	   $value);
 
-	if (! mtn_command($this, "get_db_variables", \@lines, $domain))
+	if (! $this->mtn_command("get_db_variables", \@lines, $domain))
 	{
 	    return;
 	}
@@ -1487,7 +1490,7 @@ sub get_file($$$)
 
     my($this, $buffer, $file_id) = @_;
 
-    return mtn_command($this, "get_file", $buffer, $file_id);
+    return $this->mtn_command("get_file", $buffer, $file_id);
 
 }
 #
@@ -1521,11 +1524,10 @@ sub get_file_of($$$;$)
     push(@opts, {key => "r", value => $revision_id})
 	unless (! defined($revision_id));
 
-    return mtn_command_with_options($this,
-				    "get_file_of",
-				    $buffer,
-				    \@opts,
-				    $file_name);
+    return $this->mtn_command_with_options("get_file_of",
+					   $buffer,
+					   \@opts,
+					   $file_name);
 
 }
 #
@@ -1556,7 +1558,7 @@ sub get_manifest_of($$;$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, "get_manifest_of", $ref, $revision_id);
+	return $this->mtn_command("get_manifest_of", $ref, $revision_id);
     }
     else
     {
@@ -1570,7 +1572,7 @@ sub get_manifest_of($$;$)
 	   $type,
 	   $value);
 
-	if (! mtn_command($this, "get_manifest_of", \@lines, $revision_id))
+	if (! $this->mtn_command("get_manifest_of", \@lines, $revision_id))
 	{
 	    return;
 	}
@@ -1656,7 +1658,7 @@ sub get_option($$$)
 
     my($this, $buffer, $option_name) = @_;
 
-    if (! mtn_command($this, "get_option", $buffer, $option_name))
+    if (! $this->mtn_command("get_option", $buffer, $option_name))
     {
 	return;
     }
@@ -1694,14 +1696,14 @@ sub get_revision($$$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, "get_revision", $ref, $revision_id);
+	return $this->mtn_command("get_revision", $ref, $revision_id);
     }
     else
     {
 
 	my @lines;
 
-	if (! mtn_command($this, "get_revision", \@lines, $revision_id))
+	if (! $this->mtn_command("get_revision", \@lines, $revision_id))
 	{
 	    return;
 	}
@@ -1734,7 +1736,7 @@ sub get_workspace_root($$)
 
     my($this, $buffer) = @_;
 
-    if (! mtn_command($this, "get_workspace_root", $buffer))
+    if (! $this->mtn_command("get_workspace_root", $buffer))
     {
 	return;
     }
@@ -1769,7 +1771,7 @@ sub graph($$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, "graph", $ref);
+	return $this->mtn_command("graph", $ref);
     }
     else
     {
@@ -1778,7 +1780,7 @@ sub graph($$)
 	   @lines,
 	   @parent_ids);
 
-	if (! mtn_command($this, "graph", \@lines))
+	if (! $this->mtn_command("graph", \@lines))
 	{
 	    return;
 	}
@@ -1819,7 +1821,7 @@ sub heads($$;$)
 
     my($this, $list, $branch_name) = @_;
 
-    return mtn_command($this, "heads", $list, $branch_name);
+    return $this->mtn_command("heads", $list, $branch_name);
 
 }
 #
@@ -1848,7 +1850,7 @@ sub identify($$$)
     my @list;
 
     $$buffer = "";
-    if (! mtn_command($this, "identify", \@list, $file_name))
+    if (! $this->mtn_command("identify", \@list, $file_name))
     {
 	return;
     }
@@ -1881,7 +1883,7 @@ sub interface_version($$)
     my @list;
 
     $$buffer = "";
-    if (! mtn_command($this, "interface_version", \@list))
+    if (! $this->mtn_command("interface_version", \@list))
     {
 	return;
     }
@@ -1942,22 +1944,20 @@ sub inventory($$;$@)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command_with_options($this,
-					"inventory",
-					$ref,
-					\@opts,
-					@paths);
+	return $this->mtn_command_with_options("inventory",
+					       $ref,
+					       \@opts,
+					       @paths);
     }
     else
     {
 
 	my @lines;
 
-	if (! mtn_command_with_options($this,
-				       "inventory",
-				       \@lines,
-				       \@opts,
-				       @paths))
+	if (! $this->mtn_command_with_options("inventory",
+					      \@lines,
+					      \@opts,
+					      @paths))
 	{
 	    return;
 	}
@@ -1965,7 +1965,7 @@ sub inventory($$;$@)
 	# The output format of this command was switched over to a basic_io
 	# stanza in 0.37 (i/f version 6.x).
 
-	if (can($this, MTN_INVENTORY_IN_IO_STANZA_FORMAT))
+	if ($this->supports(MTN_INVENTORY_IN_IO_STANZA_FORMAT))
 	{
 
 	    my $i;
@@ -2045,7 +2045,7 @@ sub keys($$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, "keys", $ref);
+	return $this->mtn_command("keys", $ref);
     }
     else
     {
@@ -2053,7 +2053,7 @@ sub keys($$)
 	my($i,
 	   @lines);
 
-	if (! mtn_command($this, "keys", \@lines))
+	if (! $this->mtn_command("keys", \@lines))
 	{
 	    return;
 	}
@@ -2117,7 +2117,7 @@ sub leaves($$)
 
     my($this, $list) = @_;
 
-    return mtn_command($this, "leaves", $list);
+    return $this->mtn_command("leaves", $list);
 
 }
 #
@@ -2147,7 +2147,7 @@ sub lua($$$;@)
 
     my($this, $buffer, $lua_function, @arguments) = @_;
 
-    return mtn_command($this, "lua", $buffer, $lua_function, @arguments);
+    return $this->mtn_command("lua", $buffer, $lua_function, @arguments);
 
 }
 #
@@ -2174,7 +2174,7 @@ sub packet_for_fdata($$$)
 
     my($this, $buffer, $file_id) = @_;
 
-    return mtn_command($this, "packet_for_fdata", $buffer, $file_id);
+    return $this->mtn_command("packet_for_fdata", $buffer, $file_id);
 
 }
 #
@@ -2204,8 +2204,10 @@ sub packet_for_fdelta($$$$)
 
     my($this, $buffer, $from_file_id, $to_file_id) = @_;
 
-    return mtn_command
-	($this, "packet_for_fdelta", $buffer, $from_file_id, $to_file_id);
+    return $this->mtn_command("packet_for_fdelta",
+			      $buffer,
+			      $from_file_id,
+			      $to_file_id);
 
 }
 #
@@ -2232,7 +2234,7 @@ sub packet_for_rdata($$$)
 
     my($this, $buffer, $revision_id) = @_;
 
-    return mtn_command($this, "packet_for_rdata", $buffer, $revision_id);
+    return $this->mtn_command("packet_for_rdata", $buffer, $revision_id);
 
 }
 #
@@ -2259,7 +2261,7 @@ sub packets_for_certs($$$)
 
     my($this, $buffer, $revision_id) = @_;
 
-    return mtn_command($this, "packets_for_certs", $buffer, $revision_id);
+    return $this->mtn_command("packets_for_certs", $buffer, $revision_id);
 
 }
 #
@@ -2285,7 +2287,7 @@ sub parents($$$)
 
     my($this, $list, $revision_id) = @_;
 
-    return mtn_command($this, "parents", $list, $revision_id);
+    return $this->mtn_command("parents", $list, $revision_id);
 
 }
 #
@@ -2320,18 +2322,17 @@ sub put_file($$$$)
 
     if (defined($base_file_id))
     {
-	if (! mtn_command($this,
-			  "put_file",
-			  \@list,
-			  $base_file_id,
-			  $contents))
+	if (! $this->mtn_command("put_file",
+				 \@list,
+				 $base_file_id,
+				 $contents))
 	{
 	    return;
 	}
     }
     else
     {
-	if (! mtn_command($this, "put_file", \@list, $contents))
+	if (! $this->mtn_command("put_file", \@list, $contents))
 	{
 	    return;
 	}
@@ -2366,7 +2367,7 @@ sub put_revision($$$)
 
     my @list;
 
-    if (! mtn_command($this, "put_revision", \@list, $contents))
+    if (! $this->mtn_command("put_revision", \@list, $contents))
     {
 	return;
     }
@@ -2398,7 +2399,7 @@ sub read_packets($$)
 
     my $dummy;
 
-    return mtn_command($this, "read_packets", \$dummy, $packet_data);
+    return $this->mtn_command("read_packets", \$dummy, $packet_data);
 
 }
 #
@@ -2423,7 +2424,7 @@ sub roots($$)
 
     my($this, $list) = @_;
 
-    return mtn_command($this, "roots", $list);
+    return $this->mtn_command("roots", $list);
 
 }
 #
@@ -2449,7 +2450,7 @@ sub select($$$)
 
     my($this, $list, $selector) = @_;
 
-    return mtn_command($this, "select", $list, $selector);
+    return $this->mtn_command("select", $list, $selector);
 
 }
 #
@@ -2478,7 +2479,7 @@ sub set_attribute($$$$)
 
     my $dummy;
 
-    return mtn_command($this, "set_attribute", \$dummy, $path, $key, $value);
+    return $this->mtn_command("set_attribute", \$dummy, $path, $key, $value);
 
 }
 #
@@ -2508,7 +2509,7 @@ sub set_db_variable($$$$)
 
     # This command was renamed in version 0.39 (i/f version 7.x).
 
-    if (can($this, MTN_SET_DB_VARIABLE))
+    if ($this->supports(MTN_SET_DB_VARIABLE))
     {
 	$cmd = "set_db_variable";
     }
@@ -2516,7 +2517,7 @@ sub set_db_variable($$$$)
     {
 	$cmd = "db_set";
     }
-    return mtn_command($this, $cmd, \$dummy, $domain, $name, $value);
+    return $this->mtn_command($cmd, \$dummy, $domain, $name, $value);
 
 }
 #
@@ -2584,12 +2585,11 @@ sub show_conflicts($$;$$$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command_with_options($this,
-					"show_conflicts",
-					$ref,
-					\@opts,
-					$left_revision_id,
-					$right_revision_id);
+	return $this->mtn_command_with_options("show_conflicts",
+					       $ref,
+					       \@opts,
+					       $left_revision_id,
+					       $right_revision_id);
     }
     else
     {
@@ -2597,12 +2597,11 @@ sub show_conflicts($$;$$$)
 	my($i,
 	   @lines);
 
-	if (! mtn_command_with_options($this,
-				       "show_conflicts",
-				       \@lines,
-				       \@opts,
-				       $left_revision_id,
-				       $right_revision_id))
+	if (! $this->mtn_command_with_options("show_conflicts",
+					      \@lines,
+					      \@opts,
+					      $left_revision_id,
+					      $right_revision_id))
 	{
 	    return;
 	}
@@ -2675,7 +2674,7 @@ sub tags($$;$)
 
     if (ref($ref) eq "SCALAR")
     {
-	return mtn_command($this, "tags", $ref, $branch_pattern);
+	return $this->mtn_command("tags", $ref, $branch_pattern);
     }
     else
     {
@@ -2683,7 +2682,7 @@ sub tags($$;$)
 	my($i,
 	   @lines);
 
-	if (! mtn_command($this, "tags", \@lines, $branch_pattern))
+	if (! $this->mtn_command("tags", \@lines, $branch_pattern))
 	{
 	    return;
 	}
@@ -2751,13 +2750,13 @@ sub toposort($$@)
 
     my($this, $list, @revision_ids) = @_;
 
-    return mtn_command($this, "toposort", $list, @revision_ids);
+    return $this->mtn_command("toposort", $list, @revision_ids);
 
 }
 #
 ##############################################################################
 #
-#   Routine      - can
+#   Routine      - supports
 #
 #   Description  - Determine whether a certain feature is available with the
 #                  version of Monotone that is currently being used.
@@ -2772,7 +2771,7 @@ sub toposort($$@)
 
 
 
-sub can($$)
+sub supports($$)
 {
 
     my($this, $feature) = @_;
@@ -2787,9 +2786,9 @@ sub can($$)
 	return 1 if ($this->{mtn_aif_major} >= 5);
 
     }
-    elsif ($feature == MTN_IGNORE_SUSPEND_CERTS
+    elsif ($feature == MTN_IGNORING_OF_SUSPEND_CERTS
 	   || $feature == MTN_INVENTORY_IN_IO_STANZA_FORMAT
-	   || $feature == MTN_USE_P_SELECTOR)
+	   || $feature == MTN_P_SELECTOR)
     {
 
 	# These are only available from version 0.37 (i/f version 6.x).
@@ -2800,7 +2799,7 @@ sub can($$)
     elsif ($feature == MTN_DROP_DB_VARIABLES
 	   || $feature == MTN_GET_CURRENT_REVISION
 	   || $feature == MTN_GET_DB_VARIABLES
-	   || $feature == MTN_INVENTORY_TAKE_OPTIONS
+	   || $feature == MTN_INVENTORY_TAKING_OPTIONS
 	   || $feature == MTN_SET_DB_VARIABLE)
     {
 
@@ -2818,7 +2817,7 @@ sub can($$)
 
     }
     elsif ($feature == MTN_GET_WORKSPACE_ROOT
-	   || $feature == MTN_INVENTORY_INCLUDE_BIRTH_ID
+	   || $feature == MTN_INVENTORY_WITH_BIRTH_ID
 	   || $feature == MTN_SHOW_CONFLICTS)
     {
 
@@ -2835,6 +2834,16 @@ sub can($$)
 	# These are only available from version 0.42 (i/f version 9.x).
 
 	return 1 if ($this->{mtn_aif_major} >= 9);
+
+    }
+    elsif ($feature == MTN_M_SELECTOR || $feature == MTN_U_SELECTOR)
+    {
+
+	# These are only available from version 0.43 (i/f version 9.x).
+
+	return 1 if ($this->{mtn_aif_major} >= 10
+		     || ($this->{mtn_aif_major} == 9
+			 && $this->{mtn_version} eq "0.43"));
 
     }
     else
@@ -3081,11 +3090,11 @@ sub ignore_suspend_certs($$)
 
     if ($this->{honour_suspend_certs} && $ignore)
     {
-	if (can($this, MTN_IGNORE_SUSPEND_CERTS))
+	if ($this->supports(MTN_IGNORING_OF_SUSPEND_CERTS))
 	{
 	    $this->{honour_suspend_certs} = undef;
-	    closedown($this);
-	    startup($this);
+	    $this->closedown();
+	    $this->startup();
 	}
 	else
 	{
@@ -3098,8 +3107,8 @@ sub ignore_suspend_certs($$)
     elsif (! ($this->{honour_suspend_certs} || $ignore))
     {
 	$this->{honour_suspend_certs} = 1;
-	closedown($this);
-	startup($this);
+	$this->closedown();
+	$this->startup();
     }
 
     return 1;
@@ -3136,13 +3145,16 @@ sub register_db_locked_handler(;$$$)
 {
 
     my $this;
-    if (ref($_[0]) eq __PACKAGE__)
+    if ($_[0]->isa(__PACKAGE__))
     {
-	$this = shift();
-    }
-    elsif ($_[0] eq __PACKAGE__)
-    {
-	shift();
+	if (ref($_[0]) ne "")
+	{
+	    $this = shift();
+	}
+	else
+	{
+	    shift();
+	}
     }
     my($handler, $client_data) = @_;
 
@@ -3201,7 +3213,7 @@ sub register_db_locked_handler(;$$$)
 sub register_error_handler($;$$$)
 {
 
-    shift() if ($_[0] eq __PACKAGE__ || ref($_[0]) eq __PACKAGE__);
+    shift() if ($_[0]->isa(__PACKAGE__));
     my($severity, $handler, $client_data) = @_;
 
     if ($severity == MTN_SEVERITY_ERROR)
@@ -3287,13 +3299,16 @@ sub register_io_wait_handler(;$$$$)
 {
 
     my $this;
-    if (ref($_[0]) eq __PACKAGE__)
+    if ($_[0]->isa(__PACKAGE__))
     {
-	$this = shift();
-    }
-    elsif ($_[0] eq __PACKAGE__)
-    {
-	shift();
+	if (ref($_[0]) ne "")
+	{
+	    $this = shift();
+	}
+	else
+	{
+	    shift();
+	}
     }
     my($handler, $timeout, $client_data) = @_;
 
@@ -3366,13 +3381,16 @@ sub switch_to_ws_root($$)
 {
 
     my $this;
-    if (ref($_[0]) eq __PACKAGE__)
+    if ($_[0]->isa(__PACKAGE__))
     {
-	$this = shift();
-    }
-    elsif ($_[0] eq __PACKAGE__)
-    {
-	shift();
+	if (ref($_[0]) ne "")
+	{
+	    $this = shift();
+	}
+	else
+	{
+	    shift();
+	}
     }
     my $switch = $_[0];
 
@@ -3383,14 +3401,14 @@ sub switch_to_ws_root($$)
 	    if ($this->{cd_to_ws_root} && ! $switch)
 	    {
 		$this->{cd_to_ws_root} = undef;
-		closedown($this);
-		startup($this);
+		$this->closedown();
+		$this->startup();
 	    }
 	    elsif (! $this->{cd_to_ws_root} && $switch)
 	    {
 		$this->{cd_to_ws_root} = 1;
-		closedown($this);
-		startup($this);
+		$this->closedown();
+		$this->startup();
 	    }
 	}
 	else
@@ -3654,7 +3672,7 @@ sub mtn_command($$$;@)
 
     my($this, $cmd, $ref, @parameters) = @_;
 
-    return mtn_command_with_options($this, $cmd, $ref, [], @parameters);
+    return $this->mtn_command_with_options($cmd, $ref, [], @parameters);
 
 }
 #
@@ -3737,7 +3755,7 @@ sub mtn_command_with_options($$$$;@)
 	# Startup the subordinate mtn process if it hasn't already been
 	# started.
 
-	startup($this) if ($this->{mtn_pid} == 0);
+	$this->startup() if ($this->{mtn_pid} == 0);
 
 	# Send the command.
 
@@ -3785,7 +3803,7 @@ sub mtn_command_with_options($$$$;@)
 	$db_locked_exception = $read_ok = $retry = 0;
 	eval
 	{
-	    $read_ok = mtn_read_output($this, $buffer_ref);
+	    $read_ok = $this->mtn_read_output($buffer_ref);
 	};
 	$exception = $@;
 	if ($exception ne "")
@@ -3802,7 +3820,7 @@ sub mtn_command_with_options($$$$;@)
 		# between a handled exit and one that should be dealt with.
 
 		$in = undef;
-		closedown($this);
+		$this->closedown();
 		$db_locked_exception = 1;
 
 	    }
@@ -3833,7 +3851,7 @@ sub mtn_command_with_options($$$$;@)
 	    if ($retry)
 	    {
 		$in = undef;
-		closedown($this);
+		$this->closedown();
 	    }
 	    else
 	    {
@@ -4098,9 +4116,29 @@ sub startup($)
 
 	# Get the interface version.
 
-	interface_version($this, \$version);
+	$this->interface_version(\$version);
 	($this->{mtn_aif_major}, $this->{mtn_aif_minor}) =
 	    ($version =~ m/^(\d+)\.(\d+)$/);
+
+	# If necessary get the version of the actual application (sometimes
+	# needed to differentiate when certain features were introduced that do
+	# not affect the automate stdio interface version.
+
+	if ($this->{mtn_aif_major} == 9)
+	{
+	    my($file,
+	       $line);
+	    &$croaker("Could not run command `mtn --version'")
+		unless (defined($file = IO::File->new("mtn --version |")));
+	    while (defined($line = $file->getline()))
+	    {
+		if ($line =~ m/^monotone (\d+\.\d*) ./)
+		{
+		    $this->{mtn_version} = $1;
+		}
+	    }
+	    $file->close();
+	}
 
     }
 
@@ -4282,6 +4320,7 @@ sub create_object_data()
 	    honour_suspend_certs    => 1,
 	    mtn_aif_major           => 0,
 	    mtn_aif_minor           => 0,
+	    mtn_version             => undef,
 	    cmd_cnt                 => 0,
 	    db_is_locked            => undef,
 	    db_locked_handler       => undef,
