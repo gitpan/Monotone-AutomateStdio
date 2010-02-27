@@ -1,5 +1,85 @@
 Revision history for Perl extension Monotone::AutomateStdio.
 
+0.07  Sat Feb 27 19:30:00 2010 Anthony Cooper <support@coosoft.plus.com>
+	- Added support for 0.46:
+	  - Added support for extracting the extra automate stdio data streams
+	    new in 0.46.
+	  - Added support for automate remote_stdio via the new_from_service()
+	    contructor.
+	  - Added the pull(), push() and sync() methods.
+	- Updated the POD documentation.
+	- Added a return statement to the end of all methods that don't return
+	  anything so that nothing can be accidentally leaked (Perl subroutines
+	  by default return the value of the last expression executed).
+	- Now use the getlines() method instead of <>.
+	- SIGPIPE is now ignored (caused the program to terminate when the mtn
+	  subprocess exited unexpectedly and this library was in the middle of
+	  sending it something).
+	- Stopped using abbreviated words in error messages.
+	- Rationalised the use of die() croaker() and carper() (some things
+	  were carping when they should have been croaking).
+	- Used the OO style of calling print() and printf() so that
+	  $this->{mtn_in} could be used directly.
+	- Short reads on reading data cause errors rather than a blocking read.
+	- Restructured some code in mtn_command_with_options() to be more
+	  logically grouped.
+	- Failure to read the new format header does not obscure potentially
+	  more helpful error messages.
+	- Get more consistent results (WRT irrelevant Data::Dumper related
+	  white space) if UTF-8 conversion is switched off.
+	- Switched over to custom Inside Out object design.
+	- The version numbers are not treated as floating point numbers.
+	- Made the convertion from UTF-8 into Perl's internal string format
+	  handle errors in a better way.
+	- Made the handling of the convert_to_utf8 flag a little bit more
+	  consistent with other such flags.
+	- Some code tidy ups.
+	- Added new tests for mtn version 0.46 and updated the test results
+	  with the corresponding output.
+	- Corrected some comments.
+
+0.06  Sat Nov 7 15:27:00 2009 Anthony Cooper <support@coosoft.plus.com>
+	- Updated library to take into account the changes made in Monotone
+	  0.45. This also includes the documentation. Changes include:
+	  - tags() and certs() now return a has as a key or signer rather than
+	    their name.
+	  - content_diff() now supports the --reverse and --with-headers
+	    options.
+	  - keys() now returns given_name and local_name instead of just name.
+	- Tested against a 0.45 database and also updated the test harness to
+	  reflect the above changes.
+	- Made the exception handling code more consistent and cleaner.
+	- Corrected the use of IO::Poll's mask method and added POLLHUP to the
+	  mask.
+	- Now much more explicit in handling the reaping of subprocesses and
+	  much more robust in the face of a subprocess that won't die.
+	- Now test for the presence of exceptions by using a simple boolean
+	  test.
+	- Now cope with open3() throwing exceptions whilst inside the child
+	  process.
+	- Now allow the --rcfile switch.
+	- Made other small consistency tidy ups.
+
+0.05  Fri Jun 5 17:49:00 2009 Anthony Cooper <support@coosoft.plus.com>
+	- Updated for Monotone version 0.44:
+	  - Added support for the w: selector (feature MTN_W_SELECTOR).
+	  - Modified the genkey() and keys() methods to cope with the common
+	    single hash as against separate private and public ones (feature
+	    MTN_COMMON_KEY_HASH).
+	- The type field has been dropped from the records returned by the
+	  keys() method. It wasn't really needed as only one field is sometimes
+	  not available.
+	- Updated mtn-tester so as to reduce avoidable churn in the test output
+	  and to also correctly deal with the data returned by the
+	  get_revision() method.
+	- Updated and tidied up the POD documentation to reflect the above
+	  changes.
+	- Now supports the conversion of UTF-8 data into and out of Perl's
+	  internal UTF-8 string format for data read in from and sent out to
+	  the mtn subprocess.
+	- Added a suppress_utf8_conversion() method for disabling the above
+	  conversion if so desired.
+
 0.04  Sun May 3 19:19:00 2009 Anthony Cooper <support@coosoft.plus.com>
 	- Updated for Monotone version 0.43, (added support for the m: and u:
 	  selectors).

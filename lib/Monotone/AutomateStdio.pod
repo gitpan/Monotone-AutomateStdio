@@ -6,7 +6,7 @@ Monotone::AutomateStdio - Perl interface to Monotone via automate stdio
 
 =head1 VERSION
 
-0.04
+0.07
 
 =head1 SYNOPSIS
 
@@ -34,9 +34,9 @@ called. The subprocess is terminated on object destruction or when
 $mtn-E<gt>closedown() is called.
 
 All automate commands have been implemented in this class except for the
-`stdio' command, hopefully the reason is obvious. :-) Versions of Monotone that
+`stdio' command, hopefully the reason is obvious :-). Versions of Monotone that
 are supported by this class range from 0.35 up to and including the latest
-version (currently 0.43). If you happen to be using a newer version of Monotone
+version (currently 0.46). If you happen to be using a newer version of Monotone
 then this class will hopefully largely work but without the support for new or
 changed features.
 
@@ -52,6 +52,15 @@ database.
 =item B<$mtn = Monotone::AutomateStdio-E<gt>new_from_db($db[, \@options])>
 
 Creates a new Monotone::AutomateStdio object, using the database named in $db.
+
+=item B<$mtn = Monotone::AutomateStdio-E<gt>new_from_service($service,
+[\@options])>
+
+Creates a new Monotone::AutomateStdio object, using the named network service
+(which is expressed as a hostname optionally followed by a colon and a port
+number).
+
+(feature: MTN_REMOTE_CONNECTIONS)
 
 =item B<$mtn = Monotone::AutomateStdio-E<gt>new_from_ws($ws[, \@options])>
 
@@ -186,12 +195,22 @@ background processing whilst waiting for the mtn subprocess to do
 something. For example, mtn-browse uses this handler to process any outstanding
 Gtk2 events so that the application can keep its windows up to date.
 
+=item B<Monotone::AutomateStdio-E<gt>suppress_utf8_conversion($suppress)>
+
+Controls whether UTF-8 conversion should be done on the data sent to and from
+the mtn subprocess by this class. If $suppress is true then UTF-8 conversion is
+not done, otherwise it is. The default action is to do UTF-8 conversion. This
+is both a class method as well as an object one. When used as a class method,
+the setting is used for all applicable Monotone::AutomateStdio objects that do
+not specify their own setting.
+
 =item B<Monotone::AutomateStdio-E<gt>switch_to_ws_root($switch)>
 
 Controls whether this class automatically switches to a workspace's root
-directory before running the mtn subprocess. The default action is to do so as
-this is generally safer. This setting only affects objects constructed from
-calling Monotone::AutomateStdio-E<gt>new() and
+directory before running the mtn subprocess. If $switch is true then the switch
+to the workspace's root directory is done, otherwise it is not. The default
+action is to do the switch as this is generally safer. This setting only
+affects objects constructed from calling Monotone::AutomateStdio-E<gt>new() and
 Monotone::AutomateStdio-E<gt>new_from_db(). This is both a class method as well
 as an object one. When used as a class method, the setting is used for all
 applicable Monotone::AutomateStdio objects that do not specify their own
@@ -265,7 +284,10 @@ the output from the command is simply placed into the variable. However if
 \@list is passed then the output is returned as a list of anonymous hashes,
 each one containing the following fields:
 
-    key       - The signer of the cert.
+    key       - The signer of the cert. Prior to version 0.45 of
+                Monotone this was in the form of typically an email
+                address. From version 0.45 onwards this is now a
+                hash. (feature: MTN_HASHED_SIGNATURES)
     signature - Signer status. Values can be one of "ok", "bad" or
                 "unknown".
     name      - The cert name.
@@ -299,11 +321,13 @@ used. If no file names are listed then differences in all files are reported.
 
 The $options argument is a list of valid options, with some having
 arguments. For example, one could call this method specifying all of the
-options like this:
+options like this (feature: MTN_CONTENT_DIFF_EXTRA_OPTIONS):
 
     $mtn->content_diff(\@result,
                        ["depth"   => 1,
-                        "exclude" => "work.cc"],
+                        "exclude" => "work.cc",
+                        "reverse",
+                        "with-header"],
                        "unix");
 
 =item B<$mtn-E<gt>db_get(\$buffer, $domain, $name)>
@@ -354,15 +378,27 @@ output from the command is simply placed into the variable. However if \%hash
 is passed then the output is returned as one anonymous hash containing the
 following fields:
 
-    name              - The name of the key.
-    public_hash       - The public hash code.
-    private_hash      - The private hash code.
-    public_locations  - A list of locations for the public hash code.
-                        Values can be one of "database" or
-                        "keystore".
-    private_locations - A list of locations for the private hash
-                        code. Values can be one of "database" or
-                        "keystore".
+    Prior to version 0.44 of Monotone:
+        name              - The name of the key.
+        public_hash       - The public hash code.
+        private_hash      - The private hash code.
+        public_locations  - A list of locations for the public hash
+                            code. Values can be one of "database" or
+                            "keystore".
+        private_locations - A list of locations for the private hash
+                            code. Values can be one of "database" or
+                            "keystore".
+
+    From version 0.44 of Monotone onwards
+    (feature: MTN_COMMON_KEY_HASH):
+        name              - The name of the key.
+        hash              - The hash code (both public and private).
+        public_locations  - A list of locations for the public hash
+                            code. Values can be one of "database" or
+                            "keystore".
+        private_locations - A list of locations for the private hash
+                            code. Values can be one of "database" or
+                            "keystore".
 
 =item B<$mtn-E<gt>get_attributes(\$buffer | \@list, $file_name)>
 
@@ -382,7 +418,7 @@ Also known as $mtn-E<gt>attributes().
 
 =item B<$mtn-E<gt>get_base_revision_id(\$buffer)>
 
-Get the revision upon which the workspace is based.
+Get the id of the revision upon which the workspace is based.
 
 =item B<$mtn-E<gt>get_content_changed(\@list, $revision_id, $file_name)>
 
@@ -402,7 +438,7 @@ Get the revision information for the current revision, optionally limiting the
 output by using the specified options and file restrictions. If \$buffer is
 passed then the output from the command is simply placed into the
 variable. However if \@list is passed then the output is returned in exactly
-the same format as for the $mtn-E<gt>get_current_revision() method.
+the same format as for the $mtn-E<gt>get_revision() method.
 
 The $options argument is a list of valid options, with some having
 arguments. For example, one could call this method specifying all of the
@@ -417,8 +453,8 @@ options like this:
 
 =item B<$mtn-E<gt>get_current_revision_id(\$buffer)>
 
-Get the revision that would be created if an unrestricted commit was done
-in the workspace.
+Get the id of the revision that would be created if an unrestricted commit was
+done in the workspace.
 
 =item B<$mtn-E<gt>get_db_name()>
 
@@ -620,9 +656,9 @@ each one containing one or more of the following fields:
         changes  - A list of change flags. Values can be one of
                    "attrs" or "content".
 
-            Please note that some fields are not used by all entries,
-            in which case they are not present (use Perl's exists()
-            function to determine their presence and not defined()).
+Please note that some fields are not used by all entries, in which case they
+are not present (use Perl's exists() function to determine their presence and
+not defined()).
 
 The $options argument is a list of valid options, with some having
 arguments. For example, one could call this method specifying all of the
@@ -644,19 +680,47 @@ from the command is simply placed into the variable. However if \@list is
 passed then the output is returned as a list of anonymous hashes, each one
 containing the following fields:
 
-    type              - The type of entry. Values can be one of
-                        "public" or "public-private".
-    name              - The name of the key.
-    public_hash       - The public hash code.
-    private_hash      - The private hash code. This field is only
-                        present if type is set to "public-private".
-    public_locations  - A list of locations for the public hash code.
-                        Values can be one of "database" or
-                        "keystore".
-    private_locations - A list of locations for the private hash
-                        code. Values can be one of "database" or
-                        "keystore". This field is only present if
-                        type is set to "public-private".
+    Prior to version 0.44 of Monotone:
+        name              - The name of the key.
+        public_hash       - The public hash code.
+        private_hash      - The private hash code.
+        public_locations  - A list of locations for the public hash
+                            code. Values can be one of "database" or
+                            "keystore".
+        private_locations - A list of locations for the private hash
+                            code. Values can be one of "database" or
+                            "keystore". This field is only present if
+                            there is a private key.
+
+    Version 0.44 of Monotone (feature: MTN_COMMON_KEY_HASH):
+        name              - The name of the key.
+        hash              - The hash code (both public and private).
+        public_locations  - A list of locations for the public hash
+                            code. Values can be one of "database" or
+                            "keystore".
+        private_locations - A list of locations for the private hash
+                            code. Values can be one of "database" or
+                            "keystore". This field is only present if
+                            there is a private key.
+
+    From version 0.45 of Monotone onwards
+    (feature: MTN_HASHED_SIGNATURES):
+        given_name        - The name of the key as given when it was
+                            created.
+        hash              - The hash code (both public and private).
+        local_name        - The local name of the key as returned by
+                            the get_local_key_name() hook.
+        public_locations  - A list of locations for the public hash
+                            code. Values can be one of "database" or
+                            "keystore".
+        private_locations - A list of locations for the private hash
+                            code. Values can be one of "database" or
+                            "keystore". This field is only present if
+                            there is a private key.
+
+Please note that some fields are not used by all entries, in which case they
+are not present (use Perl's exists() function to determine their presence and
+not defined()).
 
 =item B<$mtn-E<gt>leaves(\@list)>
 
@@ -692,6 +756,22 @@ packet format.
 
 Get a list of parents for the specified revision.
 
+=item B<$mtn-E<gt>pull([@options[, $service[, $pattern]]])>
+
+Synchronises database changes from the specified remote server to the local
+database but not in the other direction. Other details are identical to the
+$mtn-E<gt>sync() method.
+
+(feature: MTN_SYNCHRONISATION)
+
+=item B<$mtn-E<gt>push([@options[, $service[, $pattern]]])>
+
+Synchronises database changes from the local database to the specified remote
+server but not in the other direction. Other details are identical to the
+$mtn-E<gt>sync() method.
+
+(feature: MTN_SYNCHRONISATION)
+
 =item B<$mtn-E<gt>put_file(\$buffer, $base_file_id, \$contents)>
 
 Put the specified file contents into the database, optionally basing it on the
@@ -710,6 +790,12 @@ Decode and store the specified packet data in the database.
 
 (feature: MTN_READ_PACKETS)
 
+=item B<$mtn-E<gt>register_error_handler($severity[, $handler
+[, $client_data]])>
+
+Registers an error handler for the object rather than the class. For further
+details please see the description of the class method.
+
 =item B<$mtn-E<gt>register_db_locked_handler([$handler[, $client_data]])>
 
 Registers a database locked handler for the object rather than the class. For
@@ -720,6 +806,46 @@ further details please see the description of the class method.
 
 Registers an I/O wait handler for the object rather than the class. For further
 details please see the description of the class method.
+
+=item B<$mtn-E<gt>register_stream_handle($stream[, $handle]])>
+
+Registers the file handle specified in $handle so that it will receive data
+from the specified mtn output stream. $stream can be one of MTN_P_STREAM or
+MTN_T_STREAM. If no file handle is given then any existing file handle is
+unregistered for that stream.
+
+Please note:
+
+=over 4
+
+=item 1)
+
+It is vitally important that if you register some sort of pipe or socket to
+receive mtn stream output, that any data sent down it is read immediately and
+independently from the code calling the method generating the output (either by
+using a thread or another process). Not doing so could easily cause a deadlock
+situation to occur where the method stops processing, waiting for the pipe or
+socket to empty before proceeding.
+
+=item 2)
+
+The output streams are largely sent as received from the mtn subprocess (please
+refer to the Monotone documentation for further details on the format). The
+only difference is that since the `l' or last message (which marks the end of a
+command's output) is only sent once by mtn, this class duplicates it onto any
+registered stream so that the reader knows when there is no more data for a
+command.
+
+=item 3)
+
+In order to get the stream constants into your namespace you need to use the
+following to load in this library.
+
+    use Monotone::AutomateStdio qw(:streams);
+
+=back
+
+(feature: MTN_STREAM_IO)
 
 =item B<$mtn-E<gt>roots(\@list)>
 
@@ -798,9 +924,9 @@ or more of the following fields:
                         directory in the left revision. Values are as
                         documented for left_type.
 
-        Please note that some fields are not used by all entries, in
-        which case they are not present (use Perl's exists() function
-        to determine their presence and not defined()).
+Please note that some fields are not used by all entries, in which case they
+are not present (use Perl's exists() function to determine their presence and
+not defined()).
 
 (feature: MTN_SHOW_CONFLICTS)
 
@@ -809,6 +935,8 @@ or more of the following fields:
 Determine whether a certain feature is available with the version of Monotone
 that is currently being used by this object. The list of valid features are:
 
+    MTN_COMMON_KEY_HASH
+    MTN_CONTENT_DIFF_EXTRA_OPTIONS
     MTN_DB_GET
     MTN_DROP_ATTRIBUTE
     MTN_DROP_DB_VARIABLES
@@ -817,6 +945,7 @@ that is currently being used by this object. The list of valid features are:
     MTN_GET_CURRENT_REVISION
     MTN_GET_DB_VARIABLES
     MTN_GET_WORKSPACE_ROOT
+    MTN_HASHED_SIGNATURES
     MTN_IGNORING_OF_SUSPEND_CERTS
     MTN_INVENTORY_IN_IO_STANZA_FORMAT
     MTN_INVENTORY_TAKING_OPTIONS
@@ -825,10 +954,14 @@ that is currently being used by this object. The list of valid features are:
     MTN_M_SELECTOR
     MTN_P_SELECTOR
     MTN_READ_PACKETS
+    MTN_REMOTE_CONNECTIONS
     MTN_SET_ATTRIBUTE
     MTN_SET_DB_VARIABLE
     MTN_SHOW_CONFLICTS
+    MTN_STREAM_IO
+    MTN_SYNCHRONISATION
     MTN_U_SELECTOR
+    MTN_W_SELECTOR
 
 In order to get these constants into your namespace you need to use the
 following to load in this library.
@@ -838,6 +971,25 @@ following to load in this library.
 Please note that if you see (feature: ...) then this means that whatever is
 being discussed is only available if $mtn-E<gt>supports() returns true for the
 specified feature.
+
+=item B<$mtn-E<gt>sync([@options[, $service[, $pattern]]])>
+
+Synchronises database changes between the local database and the specified
+remote server. $service is in exactly the same format as for the
+Monotone::AutomateStdio->new_from_service() constructor. $pattern is a branch
+pattern to include in the synchronisation operation.
+
+The $options argument is a list of valid options, with some having
+arguments. For example, one could call this method specifying all of the
+options like this:
+
+    $mtn->sync(["exclude"             => "experiments.hacks",
+                "key-to-push"         => "me@mydomain.com",
+                "max-netsync-version" => 2,
+                "min-netsync-version" => 1,
+                "set-default");
+
+(feature: MTN_SYNCHRONISATION)
 
 =item B<$mtn-E<gt>tags(\$buffer | \@list[, $branch_pattern])>
 
@@ -849,12 +1001,15 @@ anonymous hashes, each one containing the following fields:
 
     tag         - The name of the tag.
     revision_id - The id of a revision that the tag is attached to.
-    signer      - The name of the key used to sign the tag cert.
+    signer      - The signer of the tag. Prior to version 0.45 of
+                  Monotone this was in the form of typically an email
+                  address. From version 0.45 onwards this is now a
+                  hash. (feature: MTN_HASHED_SIGNATURES)
     branches    - A list of all branches that contain this revision.
 
 =item B<$mtn-E<gt>toposort(\@list[, $revision_id ...])>
 
-Sort the specified revisions such that the ancestors come out first.
+Sort the specified revision ids such that the ancestors come out first.
 
 =back
 
@@ -867,6 +1022,7 @@ The following constructors return Monotone::AutomateStdio objects:
 
     Monotone::AutomateStdio->new()
     Monotone::AutomateStdio->new_from_db()
+    Monotone::AutomateStdio->new_from_service()
     Monotone::AutomateStdio->new_from_ws()
 
 The following method returns true or false (but it does not indicate success or
@@ -889,6 +1045,8 @@ The following methods do not return anything:
     Monotone::AutomateStdio->register_db_locked_handler()
     Monotone::AutomateStdio->register_error_handler()
     Monotone::AutomateStdio->register_io_wait_handler()
+    Monotone::AutomateStdio->register_stream_handle()
+    Monotone::AutomateStdio->suppress_utf8_conversion()
     $mtn->closedown()
 
 Please note that the boolean true and false values used by this class are
@@ -968,7 +1126,8 @@ into paths relative to the workspace's root directory (i.e. given a path of
 the include directory the file name gets changed to include/system.h).
 
 This makes perfect sense on the command line but possibly less so when using
-mtn from inside an application. This is why this class runs the mtn subprocess
+mtn from inside a GUI application where the directory in which the application
+was launched is not as relevant. This is why this class runs the mtn subprocess
 in specific directories depending upon how the object is constructed. If the
 object is constructed by calling Monotone::AutomateStdio-E<gt>new() or
 Monotone::AutomateStdio-E<gt>new_from_db() with the name of a database, then
@@ -982,21 +1141,61 @@ a database.
 
 Any changing of directory does not affect the caller.
 
+=head2 UTF-8 Handling
+
+A Monotone database may contain UTF-8 characters. These characters would most
+commonly appear inside text files but may also appear in the names of files,
+branches and even in certificates. Later versions of Perl have built in support
+for UTF-8 strings and can represent this sort of data quite naturally without
+the developer really having to worry too much. For this reason this class
+automatically converts any data sent between Perl and a mtn subprocess to and
+from Perl's internal UTF-8 string format and the standard binary octet
+notation.
+
+There may be times when this built in conversion is inappropriate and so one
+can simply switch it off by using the
+Monotone::AutomateStdio-E<gt>suppress_utf8_conversion() method to before
+calling Monotone::AutomateStdio-E<gt>new().
+
+Please note that not everything is converted when using this class's built in
+UTF-8 conversion mechanism. This is mainly for efficiency. For example, there
+is no real point in converting revision or file ids as these are always
+represented as forty character hexadecimal strings. Likewise packet data is not
+converted as this is always formatted to use seven bit ASCII. However there is
+one case where no conversion is done for reasons other than efficiency, and
+that is when handling file content data. Apart from differentiating between
+binary and non-binary data, Monotone just treats file content data as a
+sequence of bytes. In order to decide whether a file's contents contains UTF-8
+data this may involve looking for assorted patterns in the data or checking the
+file name's extension, all of which being beyond the scope of this class. Also
+it is a good idea to treat file content data as a simple sequence of octets
+anyway. Probably the only time that one would need to worry about UTF-8 based
+file content data is when an application is displaying it using something like
+Gtk2 (the Gtk2 bindings for Perl uses Perl's internal UTF-8 flag to determine
+whether a string needs to be handled as a UTF-8 string or as a simple sequence
+of octets). In this case, once a file's contents has been determined to contain
+text oriented data, one can use Perl's decode_utf8() function to do the
+conversion. For more information on Perl's handling of UTF-8 please see the
+documentation for Encode.
+
 =head2 Process Handling
 
 There are situations where this class does legitimately terminate the mtn
 subprocess (for example when a database locked condition is detected). When
 this happens the subprocess is reaped and its id is reset, i.e. the
 $mtn-E<gt>get_pid() method returns 0. However if the subprocess should exit
-unexpectedly then an exception is raised but no reaping or process id resetting
-takes place. Therefore the application using this class may wish to have a
-signal handler registered for SIGCHILD signals that can trigger a call to the
-$mtn-E<gt>closedown() method or destroy the object concerned in the event of an
-error. In order to distinguish between legitimate terminations of the mtn
-subprocess and failures, simply compare the reaped process id against that
-returned by the $mtn-E<gt>get_pid() method. If there is a match then there is a
-problem, otherwise, as far as this class is concerned, there is nothing to
-worry about.
+unexpectedly whilst processing a request then an exception is raised but no
+reaping or process id resetting takes place. Therefore an application using
+this class may wish to have a signal handler registered for SIGCHILD signals
+that can indirectly trigger a call to the $mtn-E<gt>closedown() method or
+destroy the object concerned in the event of an error. In order to distinguish
+between legitimate terminations of the mtn subprocess and failures, simply
+compare the reaped process id against that returned by the $mtn-E<gt>get_pid()
+method. If there is a match then there is a problem, otherwise, as far as this
+class is concerned, there is nothing to worry about.
+
+Please note that all SIGPIPE signals are set to be ignored as soon as the first
+mtn subprocess is started by this class.
 
 =head2 Use Of SIGALRM
 

@@ -6,7 +6,6 @@
 use lib "<Location Of Monotone::AutomateStdio>";
 
 use strict;
-use integer;
 use warnings;
 
 use Carp qw(cluck);
@@ -17,7 +16,7 @@ use Data::Dumper;
 use GDBM_File;
 use IO::File;
 use IO::Handle;
-use Monotone::AutomateStdio qw(:capabilities :severities);
+use Monotone::AutomateStdio qw(:capabilities :severities :streams);
 use Data::Dumper;
 
 use constant RAW         => 0;
@@ -29,7 +28,7 @@ use constant VARIABLE    => 5;
 
 # <UPDATE> - Enter your key id in the line below.
 
-my $key_id = "<Key Id>";
+my $key_id = '<Key Id>';
 
 my($data,
    %hash,
@@ -99,6 +98,15 @@ my @test_list =
       desc => "content_diff (file - options excluding options.cc)",
       type => RAW,
       args => [[exclude => "options.cc"],
+	       "9b264ec9247ce99cd1fdc5293e869c1a60b01c4c",
+	       "f06e40cb1d2b4f5c0db387e7a6c37681f1f89294"]},
+
+     {fn   => \&Monotone::AutomateStdio::content_diff,
+      desc => "content_diff (file - options excluding options.cc)",
+      feat => MTN_CONTENT_DIFF_EXTRA_OPTIONS,
+      type => RAW,
+      args => [[exclude => "options.cc",
+		"with-header"],
 	       "9b264ec9247ce99cd1fdc5293e869c1a60b01c4c",
 	       "f06e40cb1d2b4f5c0db387e7a6c37681f1f89294"]},
 
@@ -181,7 +189,7 @@ my @test_list =
      {fn   => \&Monotone::AutomateStdio::genkey,
       desc => "genkey",
       type => RECORD,
-      args => ["pooh.bear_$$\@test-id.com",
+      args => ["pooh.bear_XxX_1234\@test-id.com",
 	       "little brain"]},
 
      {fn   => \&Monotone::AutomateStdio::get_attributes,
@@ -224,8 +232,8 @@ my @test_list =
       prec => sub {
 	          system("mtn rm work.hh");
 	          system("mtn rm unix/README");
-		  system("cp /etc/hosts vocab.hh");
-		  system("cp /etc/hosts NEW.txt");
+		  system("cp ../COPYING vocab.hh");
+		  system("cp ../COPYING NEW.txt");
 		  system("mtn add NEW.txt");
 	      },
       posc => sub {
@@ -241,8 +249,8 @@ my @test_list =
       prec => sub {
 	          system("mtn rm work.hh");
 	          system("mtn rm unix/README");
-		  system("cp /etc/hosts vocab.hh");
-		  system("cp /etc/hosts NEW.txt");
+		  system("cp ../COPYING vocab.hh");
+		  system("cp ../COPYING NEW.txt");
 		  system("mtn add NEW.txt");
 	      },
       posc => sub {
@@ -259,8 +267,8 @@ my @test_list =
       prec => sub {
 	          system("mtn rm work.hh");
 	          system("mtn rm unix/README");
-		  system("cp /etc/hosts vocab.hh");
-		  system("cp /etc/hosts NEW.txt");
+		  system("cp ../COPYING vocab.hh");
+		  system("cp ../COPYING NEW.txt");
 		  system("mtn add NEW.txt");
 	      },
       posc => sub {
@@ -277,8 +285,8 @@ my @test_list =
       prec => sub {
 	          system("mtn rm work.hh");
 	          system("mtn rm unix/README");
-		  system("cp /etc/hosts vocab.hh");
-		  system("cp /etc/hosts NEW.txt");
+		  system("cp ../COPYING vocab.hh");
+		  system("cp ../COPYING NEW.txt");
 		  system("mtn add NEW.txt");
 	      },
       posc => sub {
@@ -294,8 +302,8 @@ my @test_list =
       prec => sub {
 	          system("mtn rm work.hh");
 	          system("mtn rm unix/README");
-		  system("cp /etc/hosts vocab.hh");
-		  system("cp /etc/hosts NEW.txt");
+		  system("cp ../COPYING vocab.hh");
+		  system("cp ../COPYING NEW.txt");
 		  system("mtn add NEW.txt");
 	      },
       posc => sub {
@@ -370,7 +378,7 @@ my @test_list =
 
      {fn   => \&Monotone::AutomateStdio::get_revision,
       desc => "get_revision",
-      type => LIST,
+      type => RECORD_LIST,
       args => ["ec5d40149421cbd1b6984de0806d323f9e1e6e60"]},
 
      {fn   => \&Monotone::AutomateStdio::get_workspace_root,
@@ -441,7 +449,7 @@ my @test_list =
       args => [["no-unchanged"]],
       prec => sub {
 	          system("ls -la > log");
-	          system("cp /etc/hosts another-file");
+	          system("cp ../COPYING another-file");
 	      },
       posc => sub {
 	          system("rm log another-file");
@@ -501,7 +509,7 @@ my @test_list =
       desc => "put_file",
       type => CODE,
       code => sub {
-                  my $data_file = IO::File->new("../mtn-tester", "r");
+                  my $data_file = IO::File->new("../COPYING", "r");
 		  my($base_rev,
 		     $fdata,
 		     $file_id,
@@ -513,13 +521,13 @@ my @test_list =
 		  $data_file = undef;
 
 		  $mtn->put_file(\$file_id, undef, $fdata);
-		  printf("Put mtn-tester, file id = %s\n", $file_id);
+		  printf("Put test-put-file.txt, file id = %s\n", $file_id);
 		  $mtn->get_base_revision_id(\$base_rev);
 		  $rev_data = "format_version \"1\"\n\n"
 		      . "new_manifest "
 		          . "[0000000000000000000000000000000000000000]\n\n"
 		      . "old_revision [" . $base_rev . "]\n\n"
-		      . "add_file \"mtn-tester\"\n"
+		      . "add_file \"test-put-file.txt\"\n"
 		      . " content [" . $file_id . "]\n";
 		  $mtn->put_revision(\$rev_id, $rev_data);
 		  $mtn->cert($rev_id, "author", "aecooper\@coosoft.plus.com");
@@ -534,13 +542,14 @@ my @test_list =
 		  $fdata = substr($fdata, 5);
 		  $old_file_id = $file_id;
 		  $mtn->put_file(\$file_id, $old_file_id, $fdata);
-		  printf("Put modified mtn-tester, file id = %s\n", $file_id);
+		  printf("Put modified test-put-file.txt, file id = %s\n",
+			 $file_id);
 		  $base_rev = $rev_id;
 		  $rev_data = "format_version \"1\"\n\n"
 		      . "new_manifest "
 		          . "[0000000000000000000000000000000000000000]\n\n"
 		      . "old_revision [" . $base_rev . "]\n\n"
-		      . "patch \"mtn-tester\"\n"
+		      . "patch \"test-put-file.txt\"\n"
 		      . " from [" . $old_file_id . "]\n"
 		      . "   to [" . $file_id . "]\n";
 		  $mtn->put_revision(\$rev_id, $rev_data);
@@ -626,14 +635,67 @@ my @test_list =
       type => LIST,
       args => ["b8e6b77245cf29caa1f69bfb13749d785b13eac7",
 	       "805c482bc9bb80cd393be7d3ba01a65377d91d9c",
-	       "afd43cf2ce01fa4513fb1673eae47be3b48008f6"]});
+	       "afd43cf2ce01fa4513fb1673eae47be3b48008f6"]},
+
+     {fn   => undef,
+      desc => "sync/pull/push",
+      feat => MTN_SYNCHRONISATION,
+      type => CODE,
+      code => sub {
+	          foreach my $op ("sync", "pull", "push")
+		  {
+		      my($p_buffer,
+			 $pfh,
+			 $t_buffer,
+			 $tfh);
+		      $p_buffer = $t_buffer = "";
+		      open($pfh, ">", \$p_buffer);
+		      open($tfh, ">", \$t_buffer);
+		      $mtn->register_stream_handle(MTN_P_STREAM, $pfh);
+		      $mtn->register_stream_handle(MTN_T_STREAM, $tfh);
+		      &{$Monotone::AutomateStdio::{$op}}($mtn,
+							 [],
+							 "localhost",
+							 "*");
+		      $mtn->register_stream_handle(MTN_P_STREAM, undef);
+		      $mtn->register_stream_handle(MTN_T_STREAM, undef);
+		      $pfh->close();
+		      $tfh->close();
+		      print(" ----- Output of $op progress stream -----\n");
+		      print($p_buffer);
+		      print("\n ----------\n");
+		      print(" ----- Output of $op ticker stream -----\n");
+		      print($t_buffer);
+		      print("\n ----------\n");
+		  }
+		  $mtn->drop_db_variables("database");
+		  $mtn->drop_db_variables("known-servers");
+	      }},
+
+     {fn   => undef,
+      desc => "remote connections (getting a branch listing)",
+      feat => MTN_REMOTE_CONNECTIONS,
+      type => CODE,
+      code => sub {
+	          my(@branches,
+		     $rmtn);
+		  $rmtn = Monotone::AutomateStdio->
+		      new_from_service("localhost", ["--key" => $key_id]);
+		  $rmtn->branches(\@branches);
+		  foreach my $branch (@branches)
+		  {
+		      print($branch . "\n");
+		  }
+	      }});
 
 print <<EOF;
 Monotone::AutomateStdio Test Harness Script
 
 NOTE:
 1) This test harness needs a copy of the venge.net database and specifically
-   the net.venge.monotone.contrib.lib.automate-stdio.test branch.
+   the net.venge.monotone.contrib.lib.automate-stdio.test branch. It also needs
+   a Monotone server on the local machine for automate remote_stdio testing if
+   the version of Monotone is above 0.45.
 
 2) WARNING: This test harness does modify the database by adding some
    revisions. Do not sync these changes back into any proper database. Please
@@ -655,6 +717,7 @@ Tony Cooper.
 EOF
 readline(STDIN);
 
+Monotone::AutomateStdio->suppress_utf8_conversion(1);
 $mtn = Monotone::AutomateStdio->new(["--key" => $key_id]);
 
 $data = undef;
