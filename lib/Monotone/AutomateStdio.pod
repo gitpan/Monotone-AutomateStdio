@@ -6,7 +6,7 @@ Monotone::AutomateStdio - Perl interface to Monotone via automate stdio
 
 =head1 VERSION
 
-0.10
+0.11
 
 =head1 SYNOPSIS
 
@@ -1085,6 +1085,7 @@ that is currently being used by this object. The list of valid features are:
     MTN_READ_PACKETS
     MTN_REMOTE_CONNECTIONS
     MTN_SELECTOR_FUNCTIONS
+    MTN_SELECTOR_OR_OPERATOR
     MTN_SET_ATTRIBUTE
     MTN_SET_DB_VARIABLE
     MTN_SHOW_CONFLICTS
