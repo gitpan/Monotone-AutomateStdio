@@ -505,7 +505,7 @@ our %EXPORT_TAGS = (capabilities => [qw(MTN_CHECKOUT
                                         MTN_T_STREAM)]);
 our @EXPORT = qw();
 Exporter::export_ok_tags(qw(capabilities severities streams));
-our $VERSION = "1.02";
+our $VERSION = "1.03";
 #
 ##############################################################################
 #
@@ -514,8 +514,7 @@ our $VERSION = "1.02";
 #   Description  - Class constructor. Construct an object using the specified
 #                  Monotone database.
 #
-#   Data         - $class       : Either the name of the class that is to be
-#                                 created or an object of that class.
+#   Data         - $class       : The name of the class that is to be created.
 #                  $db_name     : The full path of the Monotone database. If
 #                                 this is not provided then the database
 #                                 associated with the current workspace is
@@ -532,8 +531,7 @@ sub new_from_db($;$$)
 {
 
 
-    my $class = (ref($_[0]) ne "") ? ref($_[0]) : $_[0];
-    shift();
+    my $class = shift();
     my $db_name = (ref($_[0]) eq "ARRAY") ? undef : shift();
     my $options = shift();
     $options = [] unless (defined($options));
@@ -579,8 +577,7 @@ sub new_from_db($;$$)
 #   Description  - Class constructor. Construct an object using the specified
 #                  Monotone service.
 #
-#   Data         - $class       : Either the name of the class that is to be
-#                                 created or an object of that class.
+#   Data         - $class       : The name of the class that is to be created.
 #                  $service     : The name of the Monotone server to connect
 #                                 to, either in the form of a Monotone style
 #                                 URL or a host name optionally followed by a
@@ -596,15 +593,13 @@ sub new_from_db($;$$)
 sub new_from_service($$;$)
 {
 
-
-    my $class = (ref($_[0]) ne "") ? ref($_[0]) : $_[0];
-    shift();
-    my ($service, $options) = @_;
-    $options = [] unless (defined($options));
+    my ($class, $service, $options) = @_;
 
     my ($self,
         $server,
         $this);
+
+    $options = [] unless (defined($options));
 
     # Check all the arguments given to us.
 
@@ -673,8 +668,7 @@ sub new_from_service($$;$)
 #   Description  - Class constructor. Construct an object using the specified
 #                  Monotone workspace.
 #
-#   Data         - $class       : Either the name of the class that is to be
-#                                 created or an object of that class.
+#   Data         - $class       : The name of the class that is to be created.
 #                  $ws_path     : The base directory of a Monotone workspace.
 #                                 If this is not provided then the current
 #                                 workspace is used.
@@ -690,8 +684,7 @@ sub new_from_ws($;$$)
 {
 
 
-    my $class = (ref($_[0]) ne "") ? ref($_[0]) : $_[0];
-    shift();
+    my $class = shift();
     my $ws_path = (ref($_[0]) eq "ARRAY") ? undef : shift();
     my $options = shift();
     $options = [] unless (defined($options));
@@ -3674,7 +3667,7 @@ sub get_db_name($)
 
     my $this = $class_records{$self->{$class_name}};
 
-    if (defined($this->{dn_name}) && $this->{db_name} eq IN_MEMORY_DB_NAME)
+    if (defined($this->{db_name}) && $this->{db_name} eq IN_MEMORY_DB_NAME)
     {
         return undef;
     }
@@ -5526,12 +5519,13 @@ sub startup($)
         $this->{db_is_locked} = undef;
         $this->{mtn_err} = gensym();
 
-        # If we have a database name then convert it to an absolute path so
-        # that any subsequent chdir(2) call does not prevent opening the
-        # correct database.
+        # If we have a disk based database name then convert it to an absolute
+        # path so that any subsequent chdir(2) call does not prevent opening
+        # the correct database.
 
-        $this->{dn_name} = File::Spec->rel2abs($this->{dn_name})
-            if (defined($this->{dn_name}));
+        $this->{db_name} = File::Spec->rel2abs($this->{db_name})
+            if (defined($this->{db_name})
+                && ! defined($this->{network_service}));
 
         # Build up a list of command line arguments to pass to the mtn
         # subprocess.
@@ -5777,7 +5771,7 @@ sub get_ws_details($$$)
     $path = abs_path($ws_path);
     while (! -d File::Spec->catfile($path, "_MTN"))
     {
-        &$croaker("Invalid workspace `" . $db_name
+        &$croaker("Invalid workspace `" . $ws_path
                   . "', no _MTN directory found")
             if ($path eq File::Spec->rootdir());
         $path = dirname($path);
